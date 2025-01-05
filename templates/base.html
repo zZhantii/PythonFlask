@@ -1,0 +1,36 @@
+<!-- templates/base.html -->
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>
+        {% block title %} Flask app {% endblock %}
+    </title>
+
+    <!-- Bootstrap CSS desde CDN -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+
+    <!-- Estilos propios (en static/css) -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+    {% block head %}{% endblock %}
+</head>
+
+<body>
+    <!-- Navbar (esto se incluirá solo si lo defines en cada plantilla) -->
+    {% block navbar %}
+    {% include 'navbar.html' %}
+    {% endblock %}
+
+    <!-- Contenido principal de la página -->
+    <div class="container">
+        {% block content %}
+        {% endblock %}
+    </div>
+
+    {% block body %}{% endblock %}
+</body>
+
+</html>

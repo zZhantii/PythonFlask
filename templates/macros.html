@@ -1,0 +1,7 @@
+{% macro render_item(item) %}
+<li>
+    <strong>Nombre:</strong> {{ item.name }} <br>
+    <strong>Precio:</strong> ${{ item.price }} <br>
+    <strong>Descripción:</strong> {{ item.description }}
+</li>
+{% endmacro %}
