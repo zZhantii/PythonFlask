@@ -1,1 +1,2 @@
 Para iniciar el entorno virtual utilizar este comando en el cmd "venv\Scripts\activate"
+Para iniciar la aplicaion
