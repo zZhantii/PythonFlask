@@ -1,95 +1,112 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash, make_response
-from flask_sqlalchemy import SQLAlchemy
-from werkzeug.security import check_password_hash
+import logging
+from flask import Flask, flash, request, make_response, redirect, render_template, session
+from flask_bootstrap import Bootstrap
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField
 from wtforms.validators import DataRequired
-import datetime
+from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import check_password_hash, generate_password_hash
+import pymysql
+from sqlalchemy.exc import OperationalError
 
-# Inicializar la aplicación y la base de datos
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+
+items = ['Cereales', 'Leche', 'ChocoCrispis', 'Manzana Dorada']
+
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'mi_secreto'  # Cambia por un valor seguro
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///flask.db'  # Usa la URI de tu base de datos
-db = SQLAlchemy(app)
+bootstrap = Bootstrap(app)
+app.config["SECRET_KEY"] = "CLAVE PROTEGIDA"
 
-# Definir el modelo de usuario
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:root2025@localhost/python_bd'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+try:
+    db = SQLAlchemy(app)
+    logging.info("Conexión a la base de datos establecida correctamente")
+except OperationalError as e:
+    db = None
+    logging.error(f"Error de conexion a la base de datos: {e.orig}")
+
 class User(db.Model):
-    id_user = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    password = db.Column(db.String(120), nullable=False)
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(100), unique=True, nullable=False)
+    password = db.Column(db.String(255), nullable=False)
+    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
 
-# Formulario de inicio de sesión
+    def __str__(self):
+        return self.username
+
 class LoginForm(FlaskForm):
-    username = StringField('Usuari', validators=[DataRequired()])
-    password = PasswordField('Contrasenya', validators=[DataRequired()])
-    submit = SubmitField('Iniciar sessió')
+    username = StringField('Username', validators=[DataRequired()])
+    password = PasswordField('Password', validators=[DataRequired()])
+    submit = SubmitField('Submit')
 
 @app.route('/information', methods=['GET', 'POST'])
 def information():
-    # Crear la instancia del formulario de inicio de sesión
+    user_ip_information = session.get('user_ip_information')
+    username = session.get('username')
+
+    if not user_ip_information:
+        user_ip_information = request.remote_addr
+        session['user_ip_information'] = user_ip_information
+        flash('No se ha encontrado ninguna cookie. Creando una nueva.')
+        return redirect('/information')
+    else:
+        flash(f'Seesion encontrada. IP: {user_ip_information}, Username: {username}')
+
     login_form = LoginForm()
-    
-    # Inicializar los mensajes de error y éxito
-    error_message = None
-    success_message = None
-    
-    # Obtener la IP de la cookie si existe, o establecer una nueva cookie si no existe
-    user_ip = request.cookies.get('user_ip')
-    
-    if not user_ip:
-        user_ip = request.remote_addr
-        resp = make_response(redirect(url_for('information')))  # Redirigir a la misma ruta
-        resp.set_cookie('user_ip', user_ip, expires=datetime.datetime.now() + datetime.timedelta(days=30))  # Crear cookie con la IP
-        session.clear()  # Reiniciar la sesión
-        flash("No s'ha trobat cap cookie de sessió. Una nova ha estat creada.", category='warning')  # Mostrar mensaje de advertencia
-        return resp
-    
-    # Si el formulario ha sido enviado y es válido
+
+    if db is None:
+        flash('No se ha podido conectar a la base de datos')
+        return render_template('error.html')
+
     if login_form.validate_on_submit():
         username = login_form.username.data
         password = login_form.password.data
-
-        # Buscar el usuario en la base de datos
         user = User.query.filter_by(username=username).first()
-
         if user:
-            if check_password_hash(user.password, password):
-                session['username'] = user.username  # Guardar el nombre de usuario en la sesión
-                success_message = "Has iniciat sessió correctament."  # Mensaje de éxito
-                flash(success_message, category='success')  # Mensaje flash de éxito
-                return redirect(url_for('information'))  # Redirigir a la misma página
+            if user.password and check_password_hash(user.password, password):
+                session['username'] = username
+                flash('Has iniciat sessio correctament')
+                return redirect('/information')
             else:
-                error_message = "La contrasenya és incorrecta."
-                flash(error_message, category='danger')
+                flash('Contrasenya incorrecta')
         else:
-            error_message = "No s'ha trobat cap usuari amb aquest nom."
-            flash(error_message, category='danger')
-    
-    # Preparar los datos para la plantilla
-    items = []  # Aquí puedes agregar la lógica para obtener items de la base de datos
+            new_user = User(username=username, password=generate_password_hash(password))
+            db.session.add(new_user)
+            db.session.commit()
+            session['username'] = username
+            flash('Nou usuari creat i sessió iniciada correctament')
+            return redirect('/information')
+        
+    context = {
+        'ip': user_ip_information,
+        'items': items,
+        'login_form': login_form,
+        'username': username
+    }
 
-    # Renderizar la plantilla y pasar el contexto
-    return render_template('information.html', login_form=login_form, error_message=error_message, success_message=success_message, ip=user_ip, items=items)
+    return render_template('information.html', **context)
 
-# Ruta para cerrar sesión
 @app.route('/logout')
 def logout():
-    session.pop('username', None)  # Eliminar el usuario de la sesión
-    resp = make_response(redirect(url_for('information')))
-    resp.delete_cookie('user_ip')  # Eliminar la cookie de la IP
-    return resp
+    session.pop('username', None)
+    flash('Sessió tancada correctament')
+    return redirect('/information')
 
-# Ruta para la página principal
-@app.route('/')
-def index():
-    return redirect(url_for('information'))
+@app.route('/remove_cookies')
+def remove_cookies():
+    session.pop('user_ip_information', None)
+    flash('Cookies eliminades correctament')
+    return redirect('/information')
 
-# Ejecutar la aplicación
 if __name__ == '__main__':
-    app.run(debug=True)
+    if db is not None:
+        with app.app_context():
+            try:
+                db.create_all()
+            except OperationalError as e:
+                logging.error(f"Error creando las tablas: {e.orig}")
 
-# Creacionde tablas
-# Crea las tablas si no existen
-with app.app_context():
-    db.create_all()
-
+    app.run(host='0.0.0.0', port=91, debug=True)

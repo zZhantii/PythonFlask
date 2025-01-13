@@ -1,2 +1,3 @@
 Para iniciar el entorno virtual utilizar este comando en el cmd "venv\Scripts\activate"
-Para iniciar la aplicaion
+Para iniciar la aplicaion "python app.py"
+Para actualizar la hoja de requirementes "pip freeze > requirements.txt"
